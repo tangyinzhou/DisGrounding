@@ -15,13 +15,13 @@ def parse_args():
     parser.add_argument(
         "--pred_dir",
         type=str,
-        default="/data5/tangyinzhou/testbed_test/preds",
+        default="/data5/tangyinzhou/DisGrounding/TestBed/CD/sample_data/preds",
         help="path of the prediction results",
     )
     parser.add_argument(
         "--label_dir",
         type=str,
-        default="/data5/tangyinzhou/testbed_test/labels",
+        default="/data5/tangyinzhou/DisGrounding/TestBed/CD/sample_data/labels",
         help="path of the label",
     )
     args = parser.parse_args()
