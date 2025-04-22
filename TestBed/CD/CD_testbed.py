@@ -24,11 +24,16 @@ def parse_args():
         default="/data5/tangyinzhou/DisGrounding/TestBed/CD/sample_data/labels",
         help="path of the label",
     )
+    parser.add_argument(
+        "--ignore_zero_mask",
+        action="store_true",
+        help="wether ignore samples of zero masks",
+    )
     args = parser.parse_args()
     return args
 
 
-def cal_metrics(pred_path, label_path):
+def cal_metrics(pred_path, label_path, ignore_zero=False):
     try:
         mask = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
         label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
@@ -37,6 +42,8 @@ def cal_metrics(pred_path, label_path):
     # 确保 mask 和 label 是二值图像（0 和 1）
     mask = (mask > 0).astype(np.uint8)
     label = (label > 0).astype(np.uint8)
+    if ignore_zero and np.sum(label == 1) == 0:
+        return None
     # 计算 TP, FP, TN, FN
     TP = np.sum((mask == 1) & (label == 1))
     FP = np.sum((mask == 1) & (label == 0))
@@ -76,7 +83,13 @@ def main():
         pred_path = os.path.join(args.pred_dir, img)
         label_path = os.path.join(args.label_dir, img)
         if os.path.exists(pred_path) and os.path.exists(label_path):
-            metrics = cal_metrics(pred_path=pred_path, label_path=label_path)
+            metrics = cal_metrics(
+                pred_path=pred_path,
+                label_path=label_path,
+                ignore_zero=args.ignore_zero_mask,
+            )
+            if not metrics:
+                continue
             for metric, value in metrics.items():
                 if not metric in overall_metrics.keys():
                     overall_metrics[metric] = []
