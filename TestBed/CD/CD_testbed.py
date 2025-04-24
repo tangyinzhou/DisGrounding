@@ -8,6 +8,7 @@ import argparse
 import os
 import cv2
 import numpy as np
+from tqdm import *
 
 
 def parse_args():
@@ -15,25 +16,27 @@ def parse_args():
     parser.add_argument(
         "--pred_dir",
         type=str,
-        default="/data5/tangyinzhou/DisGrounding/TestBed/CD/sample_data/preds",
+        default="/data5/tangyinzhou/LISA_xBD/pred",
         help="path of the prediction results",
     )
     parser.add_argument(
         "--label_dir",
         type=str,
-        default="/data5/tangyinzhou/DisGrounding/TestBed/CD/sample_data/labels",
+        default="/data5/tangyinzhou/LISA_xBD/label",
         help="path of the label",
     )
     parser.add_argument(
-        "--ignore_zero_mask",
-        action="store_true",
-        help="wether ignore samples of zero masks",
+        "--no_change_sample",
+        type=str,
+        default="set_one_IoU",
+        choices=["regular", "ignore", "set_one_IoU"],
+        help="How to treat non-change sample: regular for no treatment, ignore for ignoring these sample when computing metrics, set_one for set the IoU for these samples as one",
     )
     args = parser.parse_args()
     return args
 
 
-def cal_metrics(pred_path, label_path, ignore_zero=False):
+def cal_metrics(pred_path, label_path, no_change_sample):
     try:
         mask = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
         label = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
@@ -42,7 +45,7 @@ def cal_metrics(pred_path, label_path, ignore_zero=False):
     # 确保 mask 和 label 是二值图像（0 和 1）
     mask = (mask > 0).astype(np.uint8)
     label = (label > 0).astype(np.uint8)
-    if ignore_zero and np.sum(label == 1) == 0:
+    if no_change_sample == "ignore" and np.sum(label == 1) == 0:
         return None
     # 计算 TP, FP, TN, FN
     TP = np.sum((mask == 1) & (label == 1))
@@ -56,7 +59,8 @@ def cal_metrics(pred_path, label_path, ignore_zero=False):
     Rec = TP / (TP + FN) if (TP + FN) != 0 else 0
     F1 = 2 * (Prec * Rec) / (Prec + Rec) if (Prec + Rec) != 0 else 0
     IoU = TP / (TP + FP + FN) if (TP + FP + FN) != 0 else 0
-
+    if no_change_sample == "set_one_IoU" and np.sum(label == 1) == 0:
+        IoU = 1
     # 计算 Kappa Coefficient (KC)
     P = ((TP + FP) * (TP + FN) + (FN + TN) * (TN + FP)) / (TP + TN + FP + FN) ** 2
     KC = (OA - P) / (1 - P) if (1 - P) != 0 else 0
@@ -79,27 +83,26 @@ def main():
     images = [x for x in os.listdir(args.pred_dir)]
     overall_metrics = dict()
 
-    for img in images:
+    for img in tqdm(images):
         pred_path = os.path.join(args.pred_dir, img)
         label_path = os.path.join(args.label_dir, img)
         if os.path.exists(pred_path) and os.path.exists(label_path):
             metrics = cal_metrics(
                 pred_path=pred_path,
                 label_path=label_path,
-                ignore_zero=args.ignore_zero_mask,
+                no_change_sample=args.no_change_sample,
             )
             if not metrics:
                 continue
             for metric, value in metrics.items():
                 if not metric in overall_metrics.keys():
                     overall_metrics[metric] = []
-                else:
-                    overall_metrics[metric].append(value)
+                overall_metrics[metric].append(value)
         else:
             raise ValueError("path error")
     for metric, value in metrics.items():
         overall_metrics[metric] = np.mean(overall_metrics[metric])
-        print(f"{metric}: {value:.4f}")
+        print(f"{metric}: {overall_metrics[metric]:.4f}")
 
 
 if __name__ == "__main__":
